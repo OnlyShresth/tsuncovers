@@ -73,6 +73,15 @@ app.get('/api/grids', verifyUser, async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch' });
     }
 });
+app.delete('/api/grids/:id', verifyUser, async (req, res) => {
+    try {
+        const result = await Grid.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+        if (!result) return res.status(404).json({ error: 'Grid not found' });
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete' });
+    }
+});
 
 // PROXY (Fixes the image download bug)
 app.get('/api/proxy', async (req, res) => {

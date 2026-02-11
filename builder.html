@@ -1544,6 +1544,11 @@
         const res = await fetch(`${API_BASE_URL}/api/grids`, {
           headers: { 'Authorization': `Bearer ${currentUser.token}` }
         });
+        if (res.status === 401) {
+          showNotif("Session expired. Please sign in again.", 'error');
+          logoutUser();
+          return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (data.grids) {
@@ -1575,6 +1580,11 @@
           },
           body: JSON.stringify({ grid })
         });
+        if (res.status === 401) {
+          showNotif("Session expired. Please sign in again.", 'error');
+          logoutUser();
+          return false;
+        }
         if (!res.ok) throw new Error('Backend save failed');
         const data = await res.json();
 
@@ -2076,12 +2086,42 @@
       showNotif("Loaded. Don't mess it up this time.", 'blush');
     }
 
-    function deleteSavedGrid(id) {
+    async function deleteSavedGrid(id) {
       if (!confirm("Delete this grid? It's gone forever, just so you know.")) return;
 
+      // Optimistic UI update
+      const backup = [...savedGrids];
       savedGrids = savedGrids.filter(g => String(g.id) !== String(id));
-      localStorage.setItem('tsun_saved_grids', JSON.stringify(savedGrids));
+      saveSavedGrids();
       renderSavedGrids();
+
+      // Sync with backend
+      if (currentUser && API_BASE_URL) {
+        setSyncStatus('syncing');
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/grids/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${currentUser.token}` }
+          });
+
+          if (res.status === 401) {
+            showNotif("Session expired. Please sign in again.", 'error');
+            logoutUser();
+            return;
+          }
+
+          if (!res.ok && res.status !== 404) throw new Error('Deletion failed');
+          setSyncStatus('synced');
+          setTimeout(() => setSyncStatus(''), 3000);
+        } catch (e) {
+          console.error('Delete error:', e);
+          setSyncStatus('error');
+          // Revert on critical failure? Nah, local delete is fine.
+          // savedGrids = backup; saveSavedGrids(); renderSavedGrids();
+          showNotif("Couldn't delete from server. Check connection.", 'error');
+        }
+      }
+
       showNotif("Deleted. I didn't like that one anyway.", 'blush');
     }
 
