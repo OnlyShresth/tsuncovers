@@ -812,9 +812,47 @@
       color: var(--accent);
     }
 
-    .genre-carousel-outer {
-      overflow: hidden;
+    .carousel-container {
       position: relative;
+    }
+
+    .carousel-container:hover .nav-btn {
+      opacity: 1;
+    }
+
+    .nav-btn {
+      position: absolute;
+      top: 55%;
+      transform: translateY(-50%);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: white;
+      font-family: 'DM Mono', monospace;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+      opacity: 0;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(4px);
+    }
+
+    .nav-btn:hover {
+      background: var(--accent);
+      color: black;
+    }
+
+    .nav-btn.prev {
+      left: -16px;
+    }
+
+    .nav-btn.next {
+      right: -16px;
     }
 
     .genre-carousel {
@@ -823,14 +861,12 @@
       overflow-x: auto;
       scroll-snap-type: x mandatory;
       padding-bottom: 1rem;
-      /* Space for scrollbar if visible */
       scrollbar-width: none;
-      /* Firefox */
+      scroll-behavior: smooth;
     }
 
     .genre-carousel::-webkit-scrollbar {
       display: none;
-      /* Chrome/Safari */
     }
 
     .genre-card {
@@ -1597,6 +1633,8 @@
       document.documentElement.setAttribute('data-theme', state.theme);
       themeToggle.textContent = state.theme === 'dark' ? 'Too dark' : 'Too bright';
     });
+    // Set initial text
+    themeToggle.textContent = state.theme === 'dark' ? 'Too dark' : 'Too bright';
 
     // ===================== SEARCH =====================
     searchInput.addEventListener('input', () => {
@@ -1607,7 +1645,7 @@
     });
     async function fetchSuggestions(query, autoSelect = false) {
       try {
-        const url = `https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=8&sfw=false`;
+        const url = `https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=8&order_by=popularity&sfw=false`;
         const res = await fetch(url);
         if (!res.ok) throw new Error('API Error');
         const data = await res.json();
@@ -1796,19 +1834,64 @@
     closeModal.onclick = () => gridModal.classList.remove('open');
     $('gridModalClose').onclick = () => gridModal.classList.remove('open');
 
+    // ===================== CAROUSEL LOGIC =====================
+    const rotators = {};
+
+    function scrollCarousel(g, dir) {
+      const c = $(`cat-${g}`);
+      if (c) c.scrollBy({ left: dir * 300, behavior: 'smooth' });
+    }
+
+    function initAutoRotate(g) {
+      const container = $(`wrap-${g}`);
+      const carousel = $(`cat-${g}`);
+      if (!container || !carousel) return;
+
+      const start = () => {
+        if (rotators[g]) clearInterval(rotators[g]);
+        rotators[g] = setInterval(() => {
+          // If near end, scroll to start
+          if (carousel.scrollLeft + carousel.clientWidth >= carousel.scrollWidth - 10) {
+            carousel.scrollTo({ left: 0, behavior: 'smooth' });
+          } else {
+            carousel.scrollBy({ left: 154, behavior: 'smooth' }); // card width + gap
+          }
+        }, 3000);
+      };
+
+      const stop = () => {
+        if (rotators[g]) clearInterval(rotators[g]);
+      };
+
+      container.addEventListener('mouseenter', stop);
+      container.addEventListener('mouseleave', start);
+
+      start();
+    }
+
     // ===================== GENRES & INIT =====================
     async function loadGenres() {
-      // 1. Render Skeletons for all genres immediately
+      // 1. Render Skeletons & Structure
       for (const g of state.genres) {
         const block = document.createElement('div');
-        block.innerHTML = `<h2 class="genre-title">${g}</h2><div class="genre-carousel" id="cat-${g}"></div>`;
+        block.innerHTML = `
+          <h2 class="genre-title">${g}</h2>
+          <div class="carousel-container" id="wrap-${g}">
+            <button class="nav-btn prev" onclick="scrollCarousel('${g}', -1)">‹</button>
+            <div class="genre-carousel" id="cat-${g}"></div>
+            <button class="nav-btn next" onclick="scrollCarousel('${g}', 1)">›</button>
+          </div>
+        `;
         genreBlocks.appendChild(block);
+
         const carousel = $(`cat-${g}`);
-        // Add 10 skeleton cards (enough to fill screen)
         carousel.innerHTML = Array(10).fill('<div class="skeleton-card"></div>').join('');
+
+        // Start rotation (works on skeletons too)
+        initAutoRotate(g);
       }
 
-      // 2. Progressive Fetching (Genre by Genre)
+      // 2. Progressive Fetching
       for (const g of state.genres) {
         await loadGenre(g);
       }

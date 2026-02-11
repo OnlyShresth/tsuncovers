@@ -1741,7 +1741,7 @@
       $('searchSpinner').classList.add('visible');
 
       try {
-        const url = `https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=8&type=manga&sfw=false`;
+        const url = `https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=8&type=manga&order_by=popularity&sfw=false`;
         const res = await fetch(url);
         if (!res.ok) throw new Error('API Error');
         const data = await res.json();
@@ -2052,8 +2052,11 @@
       const current = document.documentElement.getAttribute('data-theme');
       const next = current === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
-      themeToggle.querySelector('span').textContent = next === 'dark' ? 'Dark' : 'Light';
+      themeToggle.querySelector('span').textContent = next === 'dark' ? 'Too dark' : 'Too bright';
     };
+    // Initial Text
+    const initialTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+    themeToggle.querySelector('span').textContent = initialTheme === 'dark' ? 'Too dark' : 'Too bright';
 
     loadCurrentGrid();
     loadSavedGrids();
