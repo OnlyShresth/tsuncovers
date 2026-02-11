@@ -1716,16 +1716,23 @@
       if (!results.length) { closeDropdown(); return; }
       acDropdown.innerHTML = results.map((m, i) => {
         const title = getMangaTitle(m);
-        const coverUrl = buildCoverUrl(m);
         const isNSFW = m.attributes?.contentRating === 'pornographic';
         const titleStyle = isNSFW ? 'style="color: var(--blush);"' : '';
         return `
     <div class="autocomplete-item" data-idx="${i}">
-      <img class="autocomplete-thumb" src="${coverUrl}" alt="">
+      <img class="autocomplete-thumb" src="" style="background:var(--surface2)" alt="">
       <div class="autocomplete-info"><span class="name" ${titleStyle}>${escHtml(title)}</span></div>
     </div>`;
       }).join('');
       acDropdown.classList.add('open');
+
+      // Batch-load search thumbnails 5 at a time
+      const thumbBatch = results.map((m, i) => ({
+        el: acDropdown.querySelectorAll('.autocomplete-item')[i],
+        url: buildCoverUrl(m)
+      }));
+      batchLoadImages(thumbBatch, 5, 150);
+
       acDropdown.querySelectorAll('.autocomplete-item').forEach((el, i) => {
         el.addEventListener('click', () => selectManga(results[i]));
       });
