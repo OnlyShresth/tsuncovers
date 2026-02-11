@@ -1600,6 +1600,20 @@
 
     // ===================== CONSTANTS =====================
     const BLANK_SVG = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22/%3E';
+    const CACHE_VERSION = 'v3';
+
+    // Auto-clear stale cache from previous versions
+    (function migrateCache() {
+      if (localStorage.getItem('tsun_cache_version') === CACHE_VERSION) return;
+      // Remove all old cache keys (v1, v2)
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('tsun_cache')) keysToRemove.push(key);
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+      localStorage.setItem('tsun_cache_version', CACHE_VERSION);
+    })();
 
     // ===================== BATCH IMAGE LOADER =====================
     // Loads images 5 at a time to respect rate limits and avoid proxy overload
@@ -1999,7 +2013,7 @@
     async function loadGenre(g) {
       const carousel = $(`cat-${g}`);
       // Using v2 cache key to invalidate old Jikan data after migration
-      const cacheKey = `tsun_cache_v2_${g}`;
+      const cacheKey = `tsun_cache_${CACHE_VERSION}_${g}`;
 
       // CACHE CHECK
       const cached = localStorage.getItem(cacheKey);
