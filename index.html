@@ -1598,6 +1598,44 @@
       searchTimeout: null, acIndex: -1
     };
 
+    // ===================== BATCH IMAGE LOADER =====================
+    // Loads images 5 at a time to respect rate limits and avoid proxy overload
+    async function batchLoadImages(imgElements, batchSize = 5, delayMs = 150) {
+      for (let i = 0; i < imgElements.length; i += batchSize) {
+        const batch = imgElements.slice(i, i + batchSize);
+        await Promise.all(batch.map(({ el, url }) => new Promise(resolve => {
+          const img = el.tagName === 'IMG' ? el : el.querySelector('img');
+          if (!img) return resolve();
+          img.onload = resolve;
+          img.onerror = resolve;
+          img.src = url;
+        })));
+        if (i + batchSize < imgElements.length) {
+          await new Promise(r => setTimeout(r, delayMs));
+        }
+      }
+    }
+
+    // Load image for canvas drawing, returns Image object
+    async function batchLoadCanvasImages(urls, batchSize = 5, delayMs = 150) {
+      const results = new Array(urls.length).fill(null);
+      for (let i = 0; i < urls.length; i += batchSize) {
+        const batch = urls.slice(i, i + batchSize);
+        const loaded = await Promise.all(batch.map((url, j) => new Promise(resolve => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = url;
+        })));
+        loaded.forEach((img, j) => { results[i + j] = img; });
+        if (i + batchSize < urls.length) {
+          await new Promise(r => setTimeout(r, delayMs));
+        }
+      }
+      return results;
+    }
+
     // ===================== DOM REFS =====================
     const $ = id => document.getElementById(id);
     const themeToggle = $('themeToggle');
@@ -1761,19 +1799,23 @@
     function renderNextPage() {
       const start = state.page * state.perPage;
       const end = Math.min(start + state.perPage, state.covers.length);
+      const batch = [];
       state.covers.slice(start, end).forEach((cover, idx) => {
         const absIdx = start + idx;
         const card = document.createElement('div');
         card.className = 'cover-card';
-        card.innerHTML = `<div class="cover-select-badge">&#x2714;</div><img src="${cover.url}">`;
+        card.innerHTML = `<div class="cover-select-badge">&#x2714;</div><img src="" style="background:var(--surface2)">`;
         card.addEventListener('click', () => {
           if (state.selectMode) toggleSelectCover(card, absIdx);
           else openLightbox(absIdx);
         });
         coversGrid.appendChild(card);
+        batch.push({ el: card, url: cover.url });
       });
       state.page++;
       loadMoreWrap.style.display = end < state.covers.length ? 'block' : 'none';
+      // Load images 5 at a time to respect rate limits
+      batchLoadImages(batch, 5, 150);
     }
     loadMoreBtn.addEventListener('click', renderNextPage);
 
@@ -1831,18 +1873,8 @@
       ctx.fillStyle = '#0a0a0a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const images = await Promise.all(urls.map(url => new Promise(resolve => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(null);
-        // Use the backend proxy if available!
-        if (API_BASE_URL && !API_BASE_URL.includes('localhost')) {
-          img.src = `${API_BASE_URL}/api/proxy?url=${encodeURIComponent(url)}`;
-        } else {
-          img.src = url;
-        }
-      })));
+      // Load images 5 at a time for the 3x3 grid canvas
+      const images = await batchLoadCanvasImages(urls, 5, 150);
 
       images.forEach((img, i) => {
         const col = i % 3, row = Math.floor(i / 3);
@@ -1978,11 +2010,18 @@
         const data1 = await res1.json();
         const items1 = data1.data || [];
 
-        // Render first 3 immediately (Keep rest skeletons)
+        // Render first 3 immediately with skeletons, then batch-load their images
         let html = items1.map(m => createCardHtml(m)).join('');
         // Append remaining skeletons (e.g. 7 more)
         html += Array(7).fill('<div class="skeleton-card"></div>').join('');
         carousel.innerHTML = html;
+        // Batch-load the 3 initial card images
+        const initCards = carousel.querySelectorAll('.genre-card');
+        const initBatch = [];
+        initCards.forEach((card, i) => {
+          if (items1[i]) initBatch.push({ el: card, url: buildCoverUrl(items1[i]) });
+        });
+        if (initBatch.length) await batchLoadImages(initBatch, 5, 150);
 
         // RATE LIMIT PAUSE - MangaDex has better rate limits (5/sec vs Jikan's 3/sec)
         await new Promise(r => setTimeout(r, 600));
@@ -2012,17 +2051,31 @@
     const mangaRegistry = {};
 
     function renderCarouselItems(container, items) {
-      container.innerHTML = items.map(m => createCardHtml(m)).join('');
+      // Render cards with empty src first, then batch-load images
+      const html = items.map(m => createCardHtml(m)).join('');
+      container.innerHTML = html;
+      const cards = container.querySelectorAll('.genre-card');
+      const batch = [];
+      cards.forEach((card, i) => {
+        const img = card.querySelector('img');
+        if (img && items[i]) {
+          const url = buildCoverUrl(items[i]);
+          if (img.src !== url) {
+            batch.push({ el: card, url });
+          }
+        }
+      });
+      if (batch.length) batchLoadImages(batch, 5, 150);
     }
 
     function createCardHtml(m) {
       const title = getMangaTitle(m);
-      const coverUrl = buildCoverUrl(m);
       const isNSFW = m.attributes?.contentRating === 'pornographic';
       const titleStyle = isNSFW ? 'style="color: var(--blush);"' : '';
       // Store in registry instead of inline JSON
       mangaRegistry[m.id] = m;
-      return `<div class="genre-card" onclick="selectMangaById('${m.id}')"><img src="${coverUrl}" loading="lazy"><div class="genre-card-title" ${titleStyle}>${escHtml(title)}</div></div>`;
+      // Empty src — images are batch-loaded by renderCarouselItems or loadGenre
+      return `<div class="genre-card" onclick="selectMangaById('${m.id}')"><img src="" style="background:var(--surface2)" loading="lazy"><div class="genre-card-title" ${titleStyle}>${escHtml(title)}</div></div>`;
     }
 
     function selectMangaById(id) {

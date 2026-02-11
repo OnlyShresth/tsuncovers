@@ -1400,6 +1400,23 @@
     const $ = id => document.getElementById(id);
     const BLANK_SVG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"%3E%3C/svg%3E';
 
+    // Batch image loader: loads images 5 at a time to respect rate limits
+    async function batchLoadImages(imgElements, batchSize = 5, delayMs = 150) {
+      for (let i = 0; i < imgElements.length; i += batchSize) {
+        const batch = imgElements.slice(i, i + batchSize);
+        await Promise.all(batch.map(({ el, url }) => new Promise(resolve => {
+          const img = el.tagName === 'IMG' ? el : el.querySelector('img');
+          if (!img) return resolve();
+          img.onload = resolve;
+          img.onerror = resolve;
+          img.src = url;
+        })));
+        if (i + batchSize < imgElements.length) {
+          await new Promise(r => setTimeout(r, delayMs));
+        }
+      }
+    }
+
     function escHtml(str) {
       const div = document.createElement('div');
       div.textContent = str;
@@ -1790,14 +1807,13 @@
       }
       autocomplete.innerHTML = results.map((m, i) => {
         const title = getMangaTitle(m);
-        const coverUrl = buildCoverUrl(m);
         const year = m.attributes?.year || '?';
         const status = m.attributes?.status || 'unknown';
         const isNSFW = m.attributes?.contentRating === 'pornographic';
         const titleStyle = isNSFW ? 'style="color: var(--blush);"' : '';
         return `
     <div class="autocomplete-item" data-index="${i}">
-      <img class="autocomplete-thumb" src="${coverUrl}" alt="">
+      <img class="autocomplete-thumb" src="" style="background:var(--surface2)" alt="">
       <div class="autocomplete-info">
         <div class="name" ${titleStyle}>${escHtml(title)}</div>
         <div class="meta">${status} · ${year}</div>
@@ -1805,6 +1821,13 @@
     </div>`;
       }).join('');
       autocomplete.classList.add('open');
+
+      // Batch-load search thumbnails 5 at a time
+      const thumbBatch = results.map((m, i) => ({
+        el: autocomplete.querySelectorAll('.autocomplete-item')[i],
+        url: buildCoverUrl(m)
+      }));
+      batchLoadImages(thumbBatch, 5, 150);
 
       autocomplete.querySelectorAll('.autocomplete-item').forEach(item => {
         item.addEventListener('click', () => {
@@ -1888,7 +1911,7 @@
       container.style.display = 'grid';
       container.innerHTML = covers.map((c, i) => `
     <div class="picker-cover" data-idx="${i}">
-      <img src="${c.url}" loading="lazy">
+      <img src="" style="background:var(--surface2)" loading="lazy">
       <div class="cover-vol">${c.volume}</div>
     </div>`).join('');
 
@@ -1901,6 +1924,13 @@
           $('coverPickerOverlay').classList.remove('open');
         });
       });
+
+      // Batch-load cover images 5 at a time
+      const batch = covers.map((c, i) => ({
+        el: container.querySelectorAll('.picker-cover')[i],
+        url: c.url
+      }));
+      batchLoadImages(batch, 5, 150);
     }
 
     $('closePickerBtn').onclick = () => $('coverPickerOverlay').classList.remove('open');
