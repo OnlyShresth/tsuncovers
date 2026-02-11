@@ -83,6 +83,25 @@ app.delete('/api/grids/:id', verifyUser, async (req, res) => {
     }
 });
 
+// MangaDex API proxy endpoint to bypass CORS
+app.get('/api/mangadex/*', async (req, res) => {
+    try {
+        const path = req.params[0];
+        const queryString = new URLSearchParams(req.query).toString();
+        const mangadexUrl = `https://api.mangadex.org/${path}${queryString ? '?' + queryString : ''}`;
+
+        console.log('Proxying MangaDex request:', mangadexUrl);
+
+        const response = await axios.get(mangadexUrl);
+
+        res.set('Cache-Control', 'public, max-age=300'); // 5 minute cache
+        res.json(response.data);
+    } catch (error) {
+        console.error('MangaDex proxy error:', error);
+        res.status(500).json({ error: 'Failed to fetch from MangaDex' });
+    }
+});
+
 // PROXY (Fixes the image download bug)
 app.get('/api/proxy', async (req, res) => {
     const { url } = req.query;

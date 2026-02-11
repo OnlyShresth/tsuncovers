@@ -1648,7 +1648,7 @@
     });
     async function fetchSuggestions(query, autoSelect = false) {
       try {
-        const url = `https://api.mangadex.org/manga?title=${encodeURIComponent(query)}&limit=8&order[relevance]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic&includes[]=cover_art`;
+        const url = `${API_BASE_URL || ''}/api/mangadex/manga?title=${encodeURIComponent(query)}&limit=8&order[relevance]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic&includes[]=cover_art`;
         const res = await fetch(url);
         if (!res.ok) throw new Error('API Error');
         const data = await res.json();
@@ -1732,8 +1732,8 @@
       gallerySection.classList.remove('visible');
       galleryLoading.classList.add('visible');
       try {
-        // Fetch covers from MangaDex
-        const res = await fetch(`https://api.mangadex.org/cover?manga[]=${manga.id}&limit=100&order[volume]=asc`);
+        // Fetch covers from MangaDex via proxy
+        const res = await fetch(`${API_BASE_URL || ''}/api/mangadex/cover?manga[]=${manga.id}&limit=100&order[volume]=asc`);
         const data = await res.json();
         state.covers = (data.data || []).map((cover, i) => ({
           url: `https://uploads.mangadex.org/covers/${manga.id}/${cover.attributes.fileName}`,
@@ -1969,7 +1969,7 @@
       const tagId = MANGADEX_TAGS[g];
 
       try {
-        const res1 = await fetch(`https://api.mangadex.org/manga?includedTags[]=${tagId}&limit=3&order[followedCount]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic&includes[]=cover_art`);
+        const res1 = await fetch(`${API_BASE_URL || ''}/api/mangadex/manga?includedTags[]=${tagId}&limit=3&order[followedCount]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic&includes[]=cover_art`);
         if (res1.status === 429) throw new Error('Rate limit');
         const data1 = await res1.json();
         const items1 = data1.data || [];
@@ -1984,7 +1984,7 @@
         await new Promise(r => setTimeout(r, 600));
 
         // FETCH: Batch 2 (Next 22 - Slower)
-        const res2 = await fetch(`https://api.mangadex.org/manga?includedTags[]=${tagId}&limit=25&order[followedCount]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic&includes[]=cover_art`);
+        const res2 = await fetch(`${API_BASE_URL || ''}/api/mangadex/manga?includedTags[]=${tagId}&limit=25&order[followedCount]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic&includes[]=cover_art`);
         if (res2.status === 429) throw new Error('Rate limit');
         const data2 = await res2.json();
         const itemsFull = data2.data || [];

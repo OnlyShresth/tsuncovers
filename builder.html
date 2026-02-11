@@ -1751,7 +1751,7 @@
       $('searchSpinner').classList.add('visible');
 
       try {
-        const url = `https://api.mangadex.org/manga?title=${encodeURIComponent(query)}&limit=8&order[relevance]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic&includes[]=cover_art`;
+        const url = `${API_BASE_URL || ''}/api/mangadex/manga?title=${encodeURIComponent(query)}&limit=8&order[relevance]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic&includes[]=cover_art`;
         const res = await fetch(url);
         if (!res.ok) throw new Error('API Error');
         const data = await res.json();
@@ -1859,8 +1859,8 @@
 
     async function loadCovers(manga) {
       try {
-        // Fetch covers from MangaDex
-        const res = await fetch(`https://api.mangadex.org/cover?manga[]=${manga.id}&limit=100&order[volume]=asc`);
+        // Fetch covers from MangaDex via proxy
+        const res = await fetch(`${API_BASE_URL || ''}/api/mangadex/cover?manga[]=${manga.id}&limit=100&order[volume]=asc`);
         if (!res.ok) throw new Error('Failed to fetch covers');
         const data = await res.json();
         const covers = (data.data || []).map((cover, i) => ({
