@@ -87,8 +87,8 @@ app.delete('/api/grids/:id', verifyUser, async (req, res) => {
 app.get('/api/mangadex/*', async (req, res) => {
     try {
         const path = req.params[0];
-        const queryString = new URLSearchParams(req.query).toString();
-        const mangadexUrl = `https://api.mangadex.org/${path}${queryString ? '?' + queryString : ''}`;
+        const rawQuery = req.originalUrl.split('?').slice(1).join('?');
+        const mangadexUrl = `https://api.mangadex.org/${path}${rawQuery ? '?' + rawQuery : ''}`;
 
         console.log('Proxying MangaDex request:', mangadexUrl);
 
