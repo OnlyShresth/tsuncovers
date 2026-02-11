@@ -7,22 +7,30 @@ const axios = require('axios');
 
 const app = express();
 app.use(express.json());
-app.use(cors()); // Allows your frontend to talk to this server
+
+// Allow Vercel frontend to talk to this backend
+app.use(cors({
+    origin: '*', // We will tighten this later, but for now allow all to prevent errors
+    methods: ['GET', 'POST', 'OPTIONS']
+}));
 
 // 1. DATABASE CONNECTION
+// This connects to your "TsundereBot" database
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('✅ Connected to MongoDB (TsundereBot)'))
-    .catch(err => console.error('❌ MongoDB Connection Error:', err));
+    .catch(err => console.error('❌ MongoDB Error:', err));
 
+// This creates the "covers" collection automatically
 const gridSchema = new mongoose.Schema({
     userId: { type: String, required: true, index: true },
     name: String,
     manga: Array,
     createdAt: { type: Date, default: Date.now }
 });
-const Grid = mongoose.model('Grid', gridSchema);
+// The third argument 'covers' forces the collection name
+const Grid = mongoose.model('Grid', gridSchema, 'covers');
 
-// 2. GOOGLE SECURITY CHECK
+// 2. GOOGLE SECURITY
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const verifyUser = async (req, res, next) => {
@@ -34,7 +42,7 @@ const verifyUser = async (req, res, next) => {
             idToken: token,
             audience: process.env.GOOGLE_CLIENT_ID,
         });
-        req.userId = ticket.getPayload().sub; // The real Google User ID
+        req.userId = ticket.getPayload().sub;
         next();
     } catch (error) {
         res.status(401).json({ error: 'Invalid token' });
@@ -42,8 +50,6 @@ const verifyUser = async (req, res, next) => {
 };
 
 // 3. API ROUTES
-
-// Save a Grid
 app.post('/api/grids', verifyUser, async (req, res) => {
     try {
         const newGrid = new Grid({
@@ -54,11 +60,11 @@ app.post('/api/grids', verifyUser, async (req, res) => {
         await newGrid.save();
         res.json({ ok: true, id: newGrid._id });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'Failed to save' });
     }
 });
 
-// Get User's Grids
 app.get('/api/grids', verifyUser, async (req, res) => {
     try {
         const grids = await Grid.find({ userId: req.userId }).sort({ createdAt: -1 });
@@ -68,7 +74,7 @@ app.get('/api/grids', verifyUser, async (req, res) => {
     }
 });
 
-// IMAGE PROXY (Fixes the "Tainted Canvas" / Download Bug)
+// PROXY (Fixes the image download bug)
 app.get('/api/proxy', async (req, res) => {
     const { url } = req.query;
     if (!url) return res.status(400).send('No URL');
