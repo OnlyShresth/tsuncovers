@@ -996,14 +996,16 @@
       border-color: var(--accent);
     }
 
-    /* SHIMMER / LOADING */
-    @keyframes shimmer {
-      0% {
-        background-position: -200% 0;
+    /* PULSE / LOADING */
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 0.4;
       }
 
-      100% {
-        background-position: 200% 0;
+      50% {
+        opacity: 1;
       }
     }
 
@@ -1018,9 +1020,7 @@
     }
 
     .img-loading {
-      background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%) !important;
-      background-size: 200% 100% !important;
-      animation: shimmer 1.8s linear infinite !important;
+      animation: pulse 1.5s ease-in-out infinite !important;
     }
 
     .img-loaded {
@@ -1028,9 +1028,7 @@
     }
 
     .picker-cover.placeholder-shimmer img {
-      background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.8s linear infinite;
+      animation: pulse 1.5s ease-in-out infinite;
     }
 
     .picker-cover img.img-loaded {
