@@ -988,12 +988,46 @@
       object-fit: cover;
       display: block;
       border: 2px solid transparent;
-      transition: border-color var(--transition);
+      transition: border-color var(--transition), opacity 0.3s ease;
       background: var(--surface2);
     }
 
     .picker-cover:hover img {
       border-color: var(--accent);
+    }
+
+    /* SHIMMER / LOADING */
+    @keyframes shimmer {
+
+      0%,
+      100% {
+        opacity: 0.35;
+      }
+
+      50% {
+        opacity: 0.7;
+      }
+    }
+
+    .img-loading {
+      opacity: 0 !important;
+    }
+
+    .picker-cover.placeholder-shimmer img {
+      animation: shimmer 1.6s ease-in-out infinite;
+      opacity: 1;
+    }
+
+    .load-more-wrap {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: center;
+      padding: 0.5rem 0;
+    }
+
+    .load-more-wrap .btn {
+      font-size: 10px;
+      padding: 8px 20px;
     }
 
     .picker-cover .cover-vol {
@@ -1402,13 +1436,18 @@
 
     // Batch image loader: loads images 5 at a time to respect rate limits
     async function batchLoadImages(imgElements, batchSize = 5, delayMs = 150) {
+      // Mark all images as loading
+      imgElements.forEach(({ el }) => {
+        const img = el.tagName === 'IMG' ? el : el.querySelector('img');
+        if (img) img.classList.add('img-loading');
+      });
       for (let i = 0; i < imgElements.length; i += batchSize) {
         const batch = imgElements.slice(i, i + batchSize);
         await Promise.all(batch.map(({ el, url }) => new Promise(resolve => {
           const img = el.tagName === 'IMG' ? el : el.querySelector('img');
           if (!img) return resolve();
-          img.onload = resolve;
-          img.onerror = resolve;
+          img.onload = () => { img.classList.remove('img-loading'); resolve(); };
+          img.onerror = () => { img.classList.remove('img-loading'); resolve(); };
           img.src = url;
         })));
         if (i + batchSize < imgElements.length) {
@@ -1915,32 +1954,62 @@
       }
     }
 
+    let pickerCoversData = [];
+    let pickerPage = 0;
+    const PICKER_PER_PAGE = 12;
+
     function renderPickerCovers(covers) {
       $('pickerLoading').style.display = 'none';
       const container = $('pickerCovers');
       container.style.display = 'grid';
-      container.innerHTML = covers.map((c, i) => `
-    <div class="picker-cover" data-idx="${i}">
-      <img src="${BLANK_SVG}" loading="lazy">
-      <div class="cover-vol">${c.volume}</div>
-    </div>`).join('');
+      container.innerHTML = '';
+      pickerCoversData = covers;
+      pickerPage = 0;
+      renderPickerPage();
+    }
 
-      container.querySelectorAll('.picker-cover').forEach(el => {
-        el.addEventListener('click', () => {
-          const cover = covers[parseInt(el.dataset.idx)];
-          currentGrid[pickerSlotIdx].image = cover.url;
+    function renderPickerPage() {
+      const container = $('pickerCovers');
+      // Remove old "load more" button if present
+      const oldBtn = container.querySelector('.load-more-wrap');
+      if (oldBtn) oldBtn.remove();
+
+      const start = pickerPage * PICKER_PER_PAGE;
+      const end = Math.min(start + PICKER_PER_PAGE, pickerCoversData.length);
+      const slice = pickerCoversData.slice(start, end);
+
+      const batch = [];
+      slice.forEach((c, i) => {
+        const absIdx = start + i;
+        const div = document.createElement('div');
+        div.className = 'picker-cover placeholder-shimmer';
+        div.dataset.idx = absIdx;
+        div.innerHTML = `<img src="${BLANK_SVG}" loading="lazy"><div class="cover-vol">${c.volume}</div>`;
+        div.addEventListener('click', () => {
+          currentGrid[pickerSlotIdx].image = c.url;
           saveCurrentGrid();
           renderGrid();
           $('coverPickerOverlay').classList.remove('open');
         });
+        container.appendChild(div);
+        batch.push({ el: div, url: c.url });
       });
 
-      // Batch-load cover images 5 at a time
-      const batch = covers.map((c, i) => ({
-        el: container.querySelectorAll('.picker-cover')[i],
-        url: c.url
-      }));
-      batchLoadImages(batch, 5, 150);
+      pickerPage++;
+
+      // Add "Load more" button if there are more covers
+      if (end < pickerCoversData.length) {
+        const wrap = document.createElement('div');
+        wrap.className = 'load-more-wrap';
+        wrap.innerHTML = `<button class="btn" onclick="renderPickerPage()"><span>Load more (${pickerCoversData.length - end} remaining)</span></button>`;
+        container.appendChild(wrap);
+      }
+
+      // Batch-load this page's images
+      batchLoadImages(batch, 5, 150).then(() => {
+        // Remove shimmer class after images are loaded
+        batch.forEach(({ el }) => el.classList.remove('placeholder-shimmer'));
+      });
     }
 
     $('closePickerBtn').onclick = () => $('coverPickerOverlay').classList.remove('open');
